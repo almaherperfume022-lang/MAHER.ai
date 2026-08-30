@@ -1,0 +1,6 @@
+{
+  "name": "Dynamic AI Host Trivia Game",
+  "description": "Interactive trivia game featuring a dynamic, user-chosen AI host personality with voice conversations, text-to-speech commentary, and real-time Google Search grounded questions.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
