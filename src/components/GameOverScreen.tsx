@@ -32,6 +32,13 @@ interface GameOverScreenProps {
   onChangeHost: () => void;
 }
 
+const getDifficultyLabel = (diff?: string) => {
+  const d = (diff || '').toLowerCase();
+  if (d === 'easy') return { label: 'سهل • Easy', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
+  if (d === 'hard') return { label: 'صعب • Hard', style: 'bg-rose-500/10 text-rose-400 border-rose-500/30' };
+  return { label: 'متوسط • Medium', style: 'bg-amber-500/10 text-amber-300 border-amber-500/30' };
+};
+
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   host,
   stats,
@@ -241,6 +248,14 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                     <div className="text-xs sm:text-sm font-semibold text-slate-200 truncate">
                       {idx + 1}. {res.question.question}
                     </div>
+                    {(() => {
+                      const diffInfo = getDifficultyLabel(res.question.difficulty);
+                      return (
+                        <span className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${diffInfo.style}`}>
+                          {diffInfo.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
