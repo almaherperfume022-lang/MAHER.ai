@@ -1,324 +1,342 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
-import { GameSetup } from './components/GameSetup';
-import { HostSelector } from './components/HostSelector';
-import { TriviaScreen } from './components/TriviaScreen';
-import { GameOverScreen } from './components/GameOverScreen';
-import { HostChatModal } from './components/HostChatModal';
-import { PRESET_HOSTS, TRIVIA_CATEGORIES } from './constants/hosts';
-import {
-  HostPersonality,
-  GameSettings,
-  TriviaQuestion,
-  QuestionResult,
-  GameStats,
-} from './types';
-import { generateTriviaQuestions } from './services/api';
-import { soundFX } from './services/soundFx';
-import { liveAudio } from './services/liveAudio';
-import { Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
+import { DashboardView } from './components/DashboardView';
+import { StoreView } from './components/StoreView';
+import { CampaignCenterView } from './components/CampaignCenterView';
+import { TikTokStudioView } from './components/TikTokStudioView';
+import { AffiliatePortalView } from './components/AffiliatePortalView';
+import { PwaInstallView } from './components/PwaInstallView';
+import { ExecutiveCouncilView } from './components/ExecutiveCouncilView';
+import { AiAgentCenterView } from './components/AiAgentCenterView';
+import { CompanyCharterDocumentView } from './components/CompanyCharterDocumentView';
+import { SmartWalletView } from './components/SmartWalletView';
+import { GlobalMarketConquestView } from './components/GlobalMarketConquestView';
+import { HotkeysModal } from './components/HotkeysModal';
+import { INITIAL_PRODUCTS } from './data/products';
+import { ProductItem, NavigationTab } from './types';
+import { motion, AnimatePresence } from 'motion/react';
+import { Zap, Command, Keyboard } from 'lucide-react';
 
 export default function App() {
-  const [host, setHost] = useState<HostPersonality>(PRESET_HOSTS[0]);
-  const [activeView, setActiveView] = useState<'setup' | 'host_selector' | 'playing' | 'game_over'>('setup');
-  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
-  const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
+  const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
+  const [selectedProductForCampaign, setSelectedProductForCampaign] = useState<ProductItem>(INITIAL_PRODUCTS[0]);
+  const [isHotkeysOpen, setIsHotkeysOpen] = useState<boolean>(false);
+  const [hotkeyFeedback, setHotkeyFeedback] = useState<{ key: string; label: string } | null>(null);
 
-  // Audio Toggles
-  const [ttsEnabled, setTtsEnabled] = useState(true);
-  const [soundFxEnabled, setSoundFxEnabled] = useState(true);
+  const navigateToTab = useCallback((tab: NavigationTab, keyName?: string, labelName?: string) => {
+    setActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Live Chat / Voice Lounge Modal
-  const [isLiveChatOpen, setIsLiveChatOpen] = useState(false);
-
-  // Game Progress Stats & Results
-  const [stats, setStats] = useState<GameStats>({
-    score: 0,
-    correctCount: 0,
-    totalAnswered: 0,
-    currentStreak: 0,
-    maxStreak: 0,
-    timeBonus: 0,
-    lifelinesUsed: 0,
-    livesRemaining: 3,
-  });
-  const [results, setResults] = useState<QuestionResult[]>([]);
-
-  // Start Trivia Game Workflow
-  const handleStartGame = async (settings: GameSettings) => {
-    setGameSettings(settings);
-    setIsLoadingQuestions(true);
-    setLoadError(null);
-    setTtsEnabled(settings.ttsEnabled);
-
-    try {
-      const result = await generateTriviaQuestions({
-        category: settings.category,
-        customTopic: settings.customTopic,
-        difficulty: settings.difficulty,
-        count: settings.questionCount,
-        hostName: settings.host.name,
-        hostStyle: settings.host.styleDescription,
-      });
-
-      if (!result.success || !result.questions || result.questions.length === 0) {
-        throw new Error(result.error || 'Failed to generate questions. Please try again.');
-      }
-
-      setQuestions(result.questions);
-      setCurrentQuestionIndex(0);
-      setStats({
-        score: 0,
-        correctCount: 0,
-        totalAnswered: 0,
-        currentStreak: 0,
-        maxStreak: 0,
-        timeBonus: 0,
-        lifelinesUsed: 0,
-        livesRemaining: 3,
-      });
-      setResults([]);
-      setActiveView('playing');
-    } catch (err: any) {
-      console.error('Start game error:', err);
-      setLoadError(err.message || 'Unable to generate trivia questions with Gemini.');
-    } finally {
-      setIsLoadingQuestions(false);
+    if (keyName && labelName) {
+      setHotkeyFeedback({ key: keyName, label: labelName });
+      setTimeout(() => setHotkeyFeedback(null), 2500);
     }
-  };
+  }, []);
 
-  // Answer Submission Handler
-  const handleAnswer = (
-    selectedId: string,
-    isCorrect: boolean,
-    timeSpent: number,
-    points: number
-  ) => {
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ) return;
-
-    const newStreak = isCorrect ? stats.currentStreak + 1 : 0;
-    const newMaxStreak = Math.max(stats.maxStreak, newStreak);
-    const newLives = !isCorrect && gameSettings?.gameMode === 'survival'
-      ? (stats.livesRemaining || 3) - 1
-      : stats.livesRemaining;
-
-    const newResult: QuestionResult = {
-      question: currentQ,
-      selectedAnswerId: selectedId,
-      isCorrect,
-      timeSpent,
-      pointsEarned: points,
-    };
-
-    const updatedResults = [...results, newResult];
-    setResults(updatedResults);
-
-    setStats((prev) => ({
-      ...prev,
-      score: prev.score + points,
-      correctCount: prev.correctCount + (isCorrect ? 1 : 0),
-      totalAnswered: prev.totalAnswered + 1,
-      currentStreak: newStreak,
-      maxStreak: newMaxStreak,
-      livesRemaining: newLives,
-    }));
-
-    // Delay slightly to let the host banter & sound FX complete before advancing
-    setTimeout(() => {
-      // Check if Survival game over
-      if (gameSettings?.gameMode === 'survival' && newLives !== undefined && newLives <= 0) {
-        setActiveView('game_over');
+  // Global Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if the user is typing inside an input, textarea, or contentEditable
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
         return;
       }
 
-      // Check if finished all questions
-      if (currentQuestionIndex + 1 < questions.length) {
-        setCurrentQuestionIndex((prev) => prev + 1);
-      } else {
-        setActiveView('game_over');
-      }
-    }, 2800);
-  };
-
-  // Timeout Handler
-  const handleTimeout = () => {
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ) return;
-
-    const newLives = gameSettings?.gameMode === 'survival'
-      ? (stats.livesRemaining || 3) - 1
-      : stats.livesRemaining;
-
-    const newResult: QuestionResult = {
-      question: currentQ,
-      selectedAnswerId: null,
-      isCorrect: false,
-      timeSpent: gameSettings?.timePerQuestion || 20,
-      pointsEarned: 0,
-    };
-
-    setResults((prev) => [...prev, newResult]);
-    setStats((prev) => ({
-      ...prev,
-      totalAnswered: prev.totalAnswered + 1,
-      currentStreak: 0,
-      livesRemaining: newLives,
-    }));
-
-    setTimeout(() => {
-      if (gameSettings?.gameMode === 'survival' && newLives !== undefined && newLives <= 0) {
-        setActiveView('game_over');
+      // Check for help modal key (? or K)
+      if (e.key === '?' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault();
+        setIsHotkeysOpen((prev) => !prev);
         return;
       }
 
-      if (currentQuestionIndex + 1 < questions.length) {
-        setCurrentQuestionIndex((prev) => prev + 1);
-      } else {
-        setActiveView('game_over');
+      const key = e.key.toLowerCase();
+
+      // Hotkey mappings
+      switch (key) {
+        case '1':
+        case 'd':
+          e.preventDefault();
+          navigateToTab('dashboard', key.toUpperCase(), 'القيادة والاستراتيجية');
+          break;
+        case '2':
+        case 'w':
+          e.preventDefault();
+          navigateToTab('wallet', key.toUpperCase(), 'محفظة الأرباح (80%)');
+          break;
+        case '3':
+        case 'a':
+          e.preventDefault();
+          navigateToTab('campaigns', key.toUpperCase(), 'الحلول الإعلانية الذكية (AI)');
+          break;
+        case '4':
+        case 'g':
+          e.preventDefault();
+          navigateToTab('global_conquest', key.toUpperCase(), 'اكتساح الأسواق العالمية');
+          break;
+        case '5':
+        case 's':
+          e.preventDefault();
+          navigateToTab('store', key.toUpperCase(), 'متجر النخبة (22 صورة)');
+          break;
+        case '6':
+        case 'c':
+          e.preventDefault();
+          navigateToTab('ai_agent', key.toUpperCase(), 'الوكيل الاصطناعي (AI Agent)');
+          break;
+        case '7':
+        case 't':
+          e.preventDefault();
+          navigateToTab('tiktok', key.toUpperCase(), 'استوديو تيك توك السينمائي');
+          break;
+        case '8':
+        case 'l':
+          e.preventDefault();
+          navigateToTab('affiliates', key.toUpperCase(), 'لوحة الشرف وبوابة المسوقين');
+          break;
+        default:
+          break;
       }
-    }, 2600);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigateToTab]);
+
+  const handleSelectProductForCampaign = (product: ProductItem) => {
+    setSelectedProductForCampaign(product);
+    setActiveTab('campaigns');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleToggleSoundFx = () => {
-    const nextVal = !soundFxEnabled;
-    setSoundFxEnabled(nextVal);
-    soundFX.setEnabled(nextVal);
-    if (nextVal) soundFX.playSelect();
+  const handleAddProduct = (newProduct: ProductItem) => {
+    setProducts((prev) => [newProduct, ...prev]);
   };
-
-  const handleToggleTts = () => {
-    const nextVal = !ttsEnabled;
-    setTtsEnabled(nextVal);
-    if (!nextVal) liveAudio.stop();
-  };
-
-  const currentCategoryName =
-    gameSettings?.customTopic ||
-    TRIVIA_CATEGORIES.find((c) => c.id === gameSettings?.category)?.name ||
-    'Trivia Arena';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500/30 selection:text-amber-200">
-      {/* Top Navigation & Status */}
-      <Header
-        host={host}
-        ttsEnabled={ttsEnabled}
-        soundFxEnabled={soundFxEnabled}
-        onToggleTts={handleToggleTts}
-        onToggleSoundFx={handleToggleSoundFx}
-        onChangeHost={() => {
-          liveAudio.stop();
-          setActiveView('host_selector');
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500/30 selection:text-amber-200 font-sans relative" dir="rtl">
+      {/* Royal Header */}
+      <Header 
+        activeTab={activeTab} 
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        onOpenLiveChat={() => setIsLiveChatOpen(true)}
-        score={stats.score}
-        inGame={activeView === 'playing'}
+        onOpenHotkeys={() => setIsHotkeysOpen(true)}
       />
+
+      {/* Floating Hotkey Quick Indicator / Toast */}
+      <AnimatePresence>
+        {hotkeyFeedback && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 border border-amber-300 ring-4 ring-amber-500/20 font-bold text-xs"
+          >
+            <Zap className="w-4 h-4 fill-slate-950" />
+            <span>تنقل سريع عبر الاختصار [<kbd className="px-1.5 py-0.5 bg-slate-950 text-amber-300 rounded font-mono text-[11px]">{hotkeyFeedback.key}</kbd>]:</span>
+            <span className="text-slate-950 underline decoration-slate-950/40">{hotkeyFeedback.label}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col items-center justify-center">
-        {/* Error notification if question generation failed */}
-        {loadError && (
-          <div className="w-full max-w-xl mb-6 p-4 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-xl">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{loadError}</span>
-            </div>
-            <button
-              onClick={() => setLoadError(null)}
-              className="px-3 py-1 rounded-lg bg-rose-800/80 hover:bg-rose-700 text-white font-semibold text-xs"
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
             >
-              Dismiss
-            </button>
-          </div>
-        )}
+              <DashboardView
+                products={products}
+                onNavigate={setActiveTab}
+                onSelectProductForCampaign={handleSelectProductForCampaign}
+              />
+            </motion.div>
+          )}
 
-        {/* View 1: Game Setup / Category Selection */}
-        {activeView === 'setup' && (
-          <GameSetup
-            host={host}
-            onStartGame={handleStartGame}
-            onChangeHost={() => setActiveView('host_selector')}
-            isLoading={isLoadingQuestions}
-          />
-        )}
+          {activeTab === 'global_conquest' && (
+            <motion.div
+              key="global_conquest"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <GlobalMarketConquestView 
+                products={products}
+                onSelectProductForCampaign={handleSelectProductForCampaign}
+                onNavigateToWallet={() => setActiveTab('wallet')}
+              />
+            </motion.div>
+          )}
 
-        {/* View 2: Host Personality Selector & Custom Creator */}
-        {activeView === 'host_selector' && (
-          <HostSelector
-            selectedHost={host}
-            onSelectHost={(newHost) => {
-              setHost(newHost);
-              setActiveView('setup');
-            }}
-            onClose={() => setActiveView('setup')}
-          />
-        )}
+          {activeTab === 'wallet' && (
+            <motion.div
+              key="wallet"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <SmartWalletView />
+            </motion.div>
+          )}
 
-        {/* View 3: Active Trivia Stage */}
-        {activeView === 'playing' && questions.length > 0 && (
-          <TriviaScreen
-            question={questions[currentQuestionIndex]}
-            questionIndex={currentQuestionIndex}
-            totalQuestions={questions.length}
-            host={host}
-            gameMode={gameSettings?.gameMode || 'classic'}
-            timeLimit={gameSettings?.timePerQuestion || 20}
-            score={stats.score}
-            streak={stats.currentStreak}
-            lives={stats.livesRemaining}
-            ttsEnabled={ttsEnabled}
-            onAnswer={handleAnswer}
-            onTimeout={handleTimeout}
-            onOpenLiveChat={() => setIsLiveChatOpen(true)}
-          />
-        )}
+          {activeTab === 'ai_agent' && (
+            <motion.div
+              key="ai_agent"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <AiAgentCenterView
+                products={products}
+                onSelectProduct={handleSelectProductForCampaign}
+                onNavigateToCharter={() => setActiveTab('company_charter')}
+              />
+            </motion.div>
+          )}
 
-        {/* View 4: Game Over Summary & Review */}
-        {activeView === 'game_over' && (
-          <GameOverScreen
-            host={host}
-            stats={stats}
-            results={results}
-            categoryName={currentCategoryName}
-            ttsEnabled={ttsEnabled}
-            onPlayAgain={() => {
-              if (gameSettings) handleStartGame(gameSettings);
-            }}
-            onChangeSetup={() => setActiveView('setup')}
-            onChangeHost={() => setActiveView('host_selector')}
-          />
-        )}
+          {activeTab === 'company_charter' && (
+            <motion.div
+              key="company_charter"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <CompanyCharterDocumentView />
+            </motion.div>
+          )}
+
+          {activeTab === 'store' && (
+            <motion.div
+              key="store"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <StoreView
+                products={products}
+                onSelectProductForCampaign={handleSelectProductForCampaign}
+                onAddProduct={handleAddProduct}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'campaigns' && (
+            <motion.div
+              key="campaigns"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <CampaignCenterView
+                products={products}
+                selectedProduct={selectedProductForCampaign}
+                onSelectProduct={setSelectedProductForCampaign}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'tiktok' && (
+            <motion.div
+              key="tiktok"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <TikTokStudioView products={products} />
+            </motion.div>
+          )}
+
+          {activeTab === 'affiliates' && (
+            <motion.div
+              key="affiliates"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <AffiliatePortalView />
+            </motion.div>
+          )}
+
+          {activeTab === 'pwa' && (
+            <motion.div
+              key="pwa"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <PwaInstallView />
+            </motion.div>
+          )}
+
+          {activeTab === 'executive_council' && (
+            <motion.div
+              key="executive_council"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.25 }}
+            >
+              <ExecutiveCouncilView />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
-      {/* Real-Time Live API / Interactive Chat with Host Modal */}
-      <HostChatModal
-        isOpen={isLiveChatOpen}
-        onClose={() => setIsLiveChatOpen(false)}
-        host={host}
-        currentQuestion={activeView === 'playing' ? questions[currentQuestionIndex] : null}
-        score={stats.score}
-      />
-
-      {/* Footer */}
-      <footer className="w-full py-4 border-t border-slate-900 bg-slate-950/80 text-center text-xs text-slate-500">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span>Built with Google AI Studio</span>
+      {/* Royal Footer */}
+      <footer className="w-full py-6 border-t border-slate-900 bg-slate-950/90 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-slate-400">
+            <span className="text-amber-400 font-bold">شركة MAHER للتسويق بالعمولة</span>
             <span>•</span>
-            <span className="text-slate-400">Gemini 3.5 Flash Search Grounding</span>
+            <span>المالك: السيد ماهر غالب سعد حسن</span>
             <span>•</span>
-            <span className="text-slate-400">Gemini 3.1 Flash Live & TTS</span>
+            <span className="text-red-400">هدف المليار (2030/6/6)</span>
           </div>
-          <div className="text-slate-600">
-            {host.name} ({host.voice} voice) on stage
+
+          <div className="flex items-center gap-3 text-slate-500 text-[11px]">
+            <button
+              onClick={() => setIsHotkeysOpen(true)}
+              className="text-amber-400/80 hover:text-amber-300 transition-colors flex items-center gap-1 text-[11px] underline decoration-amber-500/30"
+            >
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>اختصارات لوحة المفاتيح [?]</span>
+            </button>
+            <span>•</span>
+            <span>بروتوكول Code Ambis 4.6</span>
+            <span>•</span>
+            <span>إشراف الإدارة العامة (عبد المالك & كلود)</span>
           </div>
         </div>
       </footer>
+
+      {/* Hotkeys Quick Reference Modal */}
+      <HotkeysModal
+        isOpen={isHotkeysOpen}
+        onClose={() => setIsHotkeysOpen(false)}
+        onNavigate={(tab) => navigateToTab(tab)}
+      />
     </div>
   );
 }

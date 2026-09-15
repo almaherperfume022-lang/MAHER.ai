@@ -13,15 +13,18 @@ import {
   Sliders,
   ChevronRight,
 } from 'lucide-react';
-import { GameSettings, HostPersonality, GameMode, DifficultyLevel } from '../types';
+import { GameSettings, HostPersonality, GameMode, DifficultyLevel, DailyStreakData } from '../types';
 import { TRIVIA_CATEGORIES } from '../constants/hosts';
 import { soundFX } from '../services/soundFx';
+import { DailyStreakCard } from './DailyStreakCard';
 
 interface GameSetupProps {
   host: HostPersonality;
   onStartGame: (settings: GameSettings) => void;
   onChangeHost: () => void;
   isLoading: boolean;
+  dailyStreak?: DailyStreakData;
+  onUpdateDailyStreak?: (newStreak: DailyStreakData) => void;
 }
 
 export const GameSetup: React.FC<GameSetupProps> = ({
@@ -29,6 +32,8 @@ export const GameSetup: React.FC<GameSetupProps> = ({
   onStartGame,
   onChangeHost,
   isLoading,
+  dailyStreak,
+  onUpdateDailyStreak,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('general');
   const [customTopic, setCustomTopic] = useState('');
@@ -98,6 +103,15 @@ export const GameSetup: React.FC<GameSetupProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Daily Streak Tracker & Consecutive Bonus Card */}
+      {dailyStreak && onUpdateDailyStreak && (
+        <DailyStreakCard
+          dailyStreak={dailyStreak}
+          onUpdateStreak={onUpdateDailyStreak}
+          compact={false}
+        />
+      )}
 
       {/* Main Setup Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

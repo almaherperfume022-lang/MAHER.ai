@@ -15,7 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { HostPersonality, QuestionResult, GameStats } from '../types';
+import { HostPersonality, QuestionResult, GameStats, DailyStreakData } from '../types';
 import { HostAvatar } from './HostAvatar';
 import { liveAudio } from '../services/liveAudio';
 import { soundFX } from '../services/soundFx';
@@ -27,17 +27,11 @@ interface GameOverScreenProps {
   results: QuestionResult[];
   categoryName: string;
   ttsEnabled: boolean;
+  dailyStreak?: DailyStreakData;
   onPlayAgain: () => void;
   onChangeSetup: () => void;
   onChangeHost: () => void;
 }
-
-const getDifficultyLabel = (diff?: string) => {
-  const d = (diff || '').toLowerCase();
-  if (d === 'easy') return { label: 'سهل • Easy', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
-  if (d === 'hard') return { label: 'صعب • Hard', style: 'bg-rose-500/10 text-rose-400 border-rose-500/30' };
-  return { label: 'متوسط • Medium', style: 'bg-amber-500/10 text-amber-300 border-amber-500/30' };
-};
 
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   host,
@@ -45,6 +39,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   results,
   categoryName,
   ttsEnabled,
+  dailyStreak,
   onPlayAgain,
   onChangeSetup,
   onChangeHost,
@@ -155,6 +150,55 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
           </div>
         </div>
 
+        {/* Daily Streak Active Reward Banner */}
+        {dailyStreak && (
+          <div
+            className={`max-w-xl mx-auto p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-right ${
+              dailyStreak.isBackToBack && dailyStreak.bonusMultiplier > 1
+                ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-red-500/10 border-amber-500/40 text-amber-200'
+                : 'bg-slate-950/60 border-slate-800 text-slate-300'
+            }`}
+            dir="rtl"
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`p-2 rounded-xl ${
+                  dailyStreak.isBackToBack && dailyStreak.bonusMultiplier > 1
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                <Flame
+                  className={`w-5 h-5 ${
+                    dailyStreak.isBackToBack && dailyStreak.bonusMultiplier > 1
+                      ? 'fill-amber-400'
+                      : ''
+                  }`}
+                />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                  <span>سلسلة اللعب اليومية:</span>
+                  <span className="text-amber-300 font-mono font-black">
+                    {dailyStreak.streakCount} {dailyStreak.streakCount === 1 ? 'يوم' : dailyStreak.streakCount === 2 ? 'يومان' : 'أيام'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {dailyStreak.isBackToBack && dailyStreak.bonusMultiplier > 1
+                    ? `🔥 تم تفعيل مضاعف الأيام المتتالية (${dailyStreak.bonusMultiplier}x) على جميع إجاباتك!`
+                    : 'العب غداً على التوالي لفتح مضاعف النقاط الإضافي (+25%)!'}
+                </div>
+              </div>
+            </div>
+
+            {dailyStreak.bonusMultiplier > 1 && (
+              <div className="text-left font-mono font-black text-amber-400 text-sm px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                +{Math.round((dailyStreak.bonusMultiplier - 1) * 100)}%
+              </div>
+            )}
+          </div>
+        )}
+
         {/* AI Host Report Card */}
         <HostAvatar
           host={host}
@@ -248,14 +292,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
                     <div className="text-xs sm:text-sm font-semibold text-slate-200 truncate">
                       {idx + 1}. {res.question.question}
                     </div>
-                    {(() => {
-                      const diffInfo = getDifficultyLabel(res.question.difficulty);
-                      return (
-                        <span className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${diffInfo.style}`}>
-                          {diffInfo.label}
-                        </span>
-                      );
-                    })()}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
